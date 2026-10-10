@@ -225,6 +225,14 @@ app.get('/health', (_req, res) => {
     });
 });
 
+app.get('/debug-version', (_req, res) => {
+    res.json({
+        ok: true,
+        version: 'languages-route-test-1',
+        languagesRouteExists: true
+    });
+});
+
 // ========================================
 // SUPPORTED LANGUAGES
 // ========================================
