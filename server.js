@@ -1,62 +1,143 @@
-const express = require('express');
-const app = express();
-app.disable('x-powered-by');
-app.use(express.json({ limit: '32kb' }));
+-- BLUE MODE HUB | LANGUAGE SUPPORT HELPER
+-- Copyable Lua code
+-- This does not replace your existing translation backend.
 
-const LANGUAGES = {
-  english:'en', spanish:'es', french:'fr', german:'de', japanese:'ja', korean:'ko',
-  chinese:'zh-CN', mandarin:'zh-CN', filipino:'tl', tagalog:'tl', portuguese:'pt',
-  arabic:'ar', hindi:'hi', russian:'ru', italian:'it', dutch:'nl', indonesian:'id',
-  vietnamese:'vi', thai:'th', turkish:'tr', ukrainian:'uk', polish:'pl', greek:'el',
-  hebrew:'iw', malay:'ms', swahili:'sw', bengali:'bn', urdu:'ur', tamil:'ta',
-  telugu:'te', marathi:'mr', punjabi:'pa', romanian:'ro', czech:'cs', hungarian:'hu',
-  swedish:'sv', norwegian:'no', danish:'da', finnish:'fi', persian:'fa', nepali:'ne',
-  gujarati:'gu', kannada:'kn', malayalam:'ml', serbian:'sr', croatian:'hr', slovak:'sk',
-  bulgarian:'bg', lithuanian:'lt', latvian:'lv', estonian:'et'
-};
+local HttpService = game:GetService("HttpService")
 
-app.get('/', (_req, res) => res.json({ ok: true, service: 'Blue Mode Translation API' }));
-app.get('/health', (_req, res) => res.json({ ok: true }));
+local TRANSLATION_URL =
+    "https://translatorgui.onrender.com/translate"
 
-app.post('/translate', async (req, res) => {
-  try {
-    const text = req.body && req.body.text;
-    const requested = String((req.body && req.body.targetLanguage) || 'English').trim();
-    if (typeof text !== 'string' || !text.trim()) {
-      return res.status(400).json({ error: 'Please provide a non-empty text string.' });
+local LANGUAGE_ALIASES = {
+    ["english"] = "English",
+    ["filipino"] = "Filipino",
+    ["tagalog"] = "Tagalog",
+    ["cebuano"] = "Cebuano",
+    ["ilocano"] = "Ilocano",
+    ["hiligaynon"] = "Hiligaynon",
+    ["ilonggo"] = "Ilonggo",
+    ["waray"] = "Waray",
+    ["spanish"] = "Spanish",
+    ["french"] = "French",
+    ["german"] = "German",
+    ["japanese"] = "Japanese",
+    ["korean"] = "Korean",
+    ["chinese"] = "Chinese",
+    ["mandarin"] = "Mandarin",
+    ["arabic"] = "Arabic",
+    ["hindi"] = "Hindi",
+    ["bengali"] = "Bengali",
+    ["burmese"] = "Burmese",
+    ["khmer"] = "Khmer",
+    ["lao"] = "Lao",
+    ["mongolian"] = "Mongolian",
+    ["assamese"] = "Assamese",
+    ["portuguese"] = "Portuguese",
+    ["russian"] = "Russian",
+    ["italian"] = "Italian",
+    ["dutch"] = "Dutch",
+    ["indonesian"] = "Indonesian",
+    ["vietnamese"] = "Vietnamese",
+    ["thai"] = "Thai",
+    ["turkish"] = "Turkish",
+    ["ukrainian"] = "Ukrainian",
+    ["polish"] = "Polish",
+    ["greek"] = "Greek",
+    ["hebrew"] = "Hebrew",
+    ["malay"] = "Malay",
+    ["swahili"] = "Swahili",
+    ["tamil"] = "Tamil",
+    ["telugu"] = "Telugu",
+    ["marathi"] = "Marathi",
+    ["punjabi"] = "Punjabi",
+    ["romanian"] = "Romanian",
+    ["czech"] = "Czech",
+    ["hungarian"] = "Hungarian",
+    ["swedish"] = "Swedish",
+    ["norwegian"] = "Norwegian",
+    ["danish"] = "Danish",
+    ["finnish"] = "Finnish",
+    ["persian"] = "Persian",
+    ["nepali"] = "Nepali",
+    ["gujarati"] = "Gujarati",
+    ["kannada"] = "Kannada",
+    ["malayalam"] = "Malayalam",
+    ["serbian"] = "Serbian",
+    ["croatian"] = "Croatian",
+    ["slovak"] = "Slovak",
+}
+
+local function NormalizeLanguage(language)
+    if type(language) ~= "string" or language == "" then
+        return "English"
+    end
+
+    local key = string.lower(language)
+    return LANGUAGE_ALIASES[key] or language
+end
+
+local function TranslateText(text, targetLanguage)
+    if type(text) ~= "string" or text == "" then
+        return nil, "Please enter text to translate."
+    end
+
+    local payload = {
+        text = text,
+        targetLanguage = NormalizeLanguage(targetLanguage)
     }
-    if (text.length > 4000) return res.status(413).json({ error: 'Message is too long (maximum 4000 characters).' });
-    const target = LANGUAGES[requested.toLowerCase()] || requested.toLowerCase();
-    if (!/^[a-z]{2,3}(?:-[a-zA-Z]{2,4})?$/.test(target)) {
-      return res.status(400).json({ error: `Unsupported target language: ${requested}` });
-    }
 
-    // Translation happens server-side, so the Roblox client only needs to contact this backend.
-    // The upstream Google Translate web endpoint is unofficial and can change or rate-limit requests.
-    const upstreamUrl = new URL('https://translate.googleapis.com/translate_a/single');
-    upstreamUrl.searchParams.set('client', 'gtx');
-    upstreamUrl.searchParams.set('sl', 'auto');
-    upstreamUrl.searchParams.set('tl', target);
-    upstreamUrl.searchParams.set('dt', 't');
-    upstreamUrl.searchParams.set('q', text);
-    const upstream = await fetch(upstreamUrl, {
-      headers: { 'User-Agent': 'BlueModeTranslation/1.0', 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(15000)
-    });
-    if (!upstream.ok) return res.status(502).json({ error: `Translation provider returned HTTP ${upstream.status}.` });
-    const data = await upstream.json();
-    if (!Array.isArray(data) || !Array.isArray(data[0])) {
-      return res.status(502).json({ error: 'Translation provider returned an unexpected response.' });
-    }
-    const translatedText = data[0]
-      .filter(segment => Array.isArray(segment) && typeof segment[0] === 'string')
-      .map(segment => segment[0]).join('');
-    if (!translatedText) return res.status(502).json({ error: 'Translation provider returned no translated text.' });
-    res.json({ translatedText, detectedLanguage: typeof data[2] === 'string' ? data[2] : null });
-  } catch (err) {
-    res.status(502).json({ error: 'Translation provider unavailable.', details: String(err.message || err) });
-  }
-});
+    local success, response = pcall(function()
+        return HttpService:RequestAsync({
+            Url = TRANSLATION_URL,
+            Method = "POST",
+            Headers = {
+                ["Content-Type"] = "application/json"
+            },
+            Body = HttpService:JSONEncode(payload)
+        })
+    end)
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`Blue Mode Translation API listening on ${port}`));
+    if not success then
+        return nil, "Translation request failed: " .. tostring(response)
+    end
+
+    if not response.Success then
+        return nil, "Translation server returned HTTP "
+            .. tostring(response.StatusCode)
+    end
+
+    local decodedSuccess, data = pcall(function()
+        return HttpService:JSONDecode(response.Body)
+    end)
+
+    if not decodedSuccess or type(data) ~= "table" then
+        return nil, "Invalid translation server response."
+    end
+
+    if type(data.translatedText) ~= "string" then
+        return nil, data.error or "No translated text was returned."
+    end
+
+    local detectedLanguage =
+        data.detectedLanguageName
+        or data.detectedLanguage
+        or "Undetermined"
+
+    if detectedLanguage == "und" or detectedLanguage == "" then
+        detectedLanguage = "Undetermined"
+    end
+
+    return data.translatedText, detectedLanguage
+end
+
+-- Example:
+-- local translated, detected = TranslateText(
+--     "Kumusta ka?",
+--     "English"
+-- )
+--
+-- if translated then
+--     print("Translation:", translated)
+--     print("Detected language:", detected)
+-- else
+--     warn(detected)
+-- end
